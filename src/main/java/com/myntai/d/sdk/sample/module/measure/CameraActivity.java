@@ -1,5 +1,6 @@
 package com.myntai.d.sdk.sample.module.measure;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
@@ -10,6 +11,7 @@ import android.graphics.Point;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.os.Message;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.Size;
@@ -26,8 +28,13 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
+import com.baidu.tts.chainofresponsibility.logger.LoggerProxy;
+import com.baidu.tts.client.SpeechSynthesizer;
+import com.baidu.tts.client.TtsMode;
 import com.myntai.d.sdk.MYNTCamera;
 import com.myntai.d.sdk.bean.FrameData;
 import com.myntai.d.sdk.bean.ImuData;
@@ -39,8 +46,13 @@ import com.myntai.d.sdk.sample.widget.UVCCameraTextureView;
 import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.GregorianCalendar;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public class CameraActivity extends BaseActivity {
 
@@ -112,6 +124,28 @@ public class CameraActivity extends BaseActivity {
 
     MYNTCamera camera;
 
+    /*手势识别常量*/
+    private Timer timer;    //每秒识别一次
+
+    /*文本转语音常量*/
+    // ================== 精简版初始化参数设置开始 ==========================
+    /**
+     * 发布时请替换成自己申请的appId appKey 和 secretKey。注意如果需要离线合成功能,请在您申请的应用中填写包名。
+     * 本demo的包名是com.baidu.tts.sample，定义在build.gradle中。
+     */
+    protected String appId;
+
+    protected String appKey;
+
+    protected String secretKey;
+
+    // TtsMode.MIX; 离在线融合，在线优先； TtsMode.ONLINE 纯在线； 没有纯离线
+    private TtsMode ttsMode = TtsMode.ONLINE;
+
+    // ===============初始化参数设置完毕，更多合成参数请至getParams()方法中设置 =================
+
+    protected SpeechSynthesizer mSpeechSynthesizer;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -125,6 +159,21 @@ public class CameraActivity extends BaseActivity {
         }
 
         checkPermission();
+
+        /*TTS*/
+        appId = "18392638";
+        appKey = "XZ9lUxNi0V3Vg7AgeZyikiBU";
+        secretKey = "sGRzPo3CoNuvQilnaOIcUI7ZwDIj8eFt";
+        initTTs();
+
+        /*每隔一秒使用handler发送一下消息,也就是每隔一秒执行一次,一直重复执行*/
+        timer=new Timer();
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                AutoRecognize();
+            }
+        },5000,2000);//初始化相机5秒后开始，每隔一秒使用handler发送一下消息,也就是每隔一秒执行一次,一直重复执行
     }
 
     private void initUI() {
@@ -249,19 +298,62 @@ public class CameraActivity extends BaseActivity {
     }
 
     public void saveDepth(View view) {
-//        mCameraTools.saveDepthData(mPreviewSize.getWidth(), mPreviewSize.getHeight());
-        TextureView textureView = findViewById(R.id.depthTextureView);
-        Bitmap bitmap = textureView.getBitmap();
-        try {
-            Classifier classifier = Classifier.create(this, Classifier.Model.FLOAT, Classifier.Device.GPU, 1);
-            String temp = classifier.recognizeImage(bitmap,90).toString();
-            Toast.makeText(this,temp,Toast.LENGTH_SHORT).show();
-        } catch (IOException e) {
-            Toast.makeText(this,e.getMessage(),Toast.LENGTH_SHORT).show();
-        }
+        mCameraTools.saveDepthData(mPreviewSize.getWidth(), mPreviewSize.getHeight());
     }
+
     public void readDepth(View view) {
         mCameraTools.readDepthData();
+    }
+
+    public void AutoRecognize(){
+        TextureView textureView = findViewById(R.id.depthTextureView);
+        Bitmap bitmap = textureView.getBitmap();
+        if(bitmap!=null) {
+            try {
+                Classifier classifier = Classifier.create(this, Classifier.Model.FLOAT, Classifier.Device.GPU, 1);
+                mSpeechSynthesizer.speak(classifier.recognizeImage(bitmap, 90).get(0).getTitle());
+            } catch (IOException e) {
+            }
+        }
+    }
+
+    /*TTS方法*/
+    private void initTTs() {
+        LoggerProxy.printable(true); // 日志打印在logcat中
+
+        // 1. 获取实例
+        mSpeechSynthesizer = SpeechSynthesizer.getInstance();
+        mSpeechSynthesizer.setContext(this);
+
+        // 3. 设置appId，appKey.secretKey
+        mSpeechSynthesizer.setAppId(appId);
+        mSpeechSynthesizer.setApiKey(appKey, secretKey);
+
+        // 5. 以下setParam 参数选填。不填写则默认值生效
+        // 设置在线发声音人： 0 普通女声（默认） 1 普通男声 2 特别男声 3 情感男声<度逍遥> 4 情感儿童声<度丫丫>
+        mSpeechSynthesizer.setParam(SpeechSynthesizer.PARAM_SPEAKER, "0");
+        // 设置合成的音量，0-15 ，默认 5
+        mSpeechSynthesizer.setParam(SpeechSynthesizer.PARAM_VOLUME, "9");
+        // 设置合成的语速，0-15 ，默认 5
+        mSpeechSynthesizer.setParam(SpeechSynthesizer.PARAM_SPEED, "5");
+        // 设置合成的语调，0-15 ，默认 5
+        mSpeechSynthesizer.setParam(SpeechSynthesizer.PARAM_PITCH, "5");
+
+        mSpeechSynthesizer.setParam(SpeechSynthesizer.PARAM_MIX_MODE, SpeechSynthesizer.MIX_MODE_DEFAULT);
+        // 该参数设置为TtsMode.MIX生效。即纯在线模式不生效。
+        // MIX_MODE_DEFAULT 默认 ，wifi状态下使用在线，非wifi离线。在线状态下，请求超时6s自动转离线
+        // MIX_MODE_HIGH_SPEED_SYNTHESIZE_WIFI wifi状态下使用在线，非wifi离线。在线状态下， 请求超时1.2s自动转离线
+        // MIX_MODE_HIGH_SPEED_NETWORK ， 3G 4G wifi状态下使用在线，其它状态离线。在线状态下，请求超时1.2s自动转离线
+        // MIX_MODE_HIGH_SPEED_SYNTHESIZE, 2G 3G 4G wifi状态下使用在线，其它状态离线。在线状态下，请求超时1.2s自动转离线
+
+        // mSpeechSynthesizer.setAudioStreamType(AudioManager.MODE_IN_CALL); // 调整音频输出
+
+        // x. 额外 ： 自动so文件是否复制正确及上面设置的参数
+        Map<String, String> params = new HashMap<>();
+        // 复制下上面的 mSpeechSynthesizer.setParam参数
+
+        // 6. 初始化
+        mSpeechSynthesizer.initTts(ttsMode);
     }
 
     @Override
@@ -281,7 +373,7 @@ public class CameraActivity extends BaseActivity {
                 }
             }
         }).start();
-
+        timer.cancel();
         mHandler.removeCallbacksAndMessages(null);
         mHandler = null;
     }

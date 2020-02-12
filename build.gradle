@@ -108,7 +108,7 @@ android {
 }
 
 dependencies {
-    implementation fileTree(include: ['*.aar'], dir: 'libs')
+    implementation fileTree(include: ['*.aar','*.jar'], dir: 'libs')
     implementation 'androidx.appcompat:appcompat:1.0.0'
     // Build off of nightly TensorFlow Lite
     implementation 'org.tensorflow:tensorflow-lite:0.0.0-nightly'

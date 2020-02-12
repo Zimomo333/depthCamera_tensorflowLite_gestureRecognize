@@ -11,5 +11,5 @@ public final class BuildConfig {
   public static final int VERSION_CODE = 1;
   public static final String VERSION_NAME = "1.3.9";
   // Fields from default config.
-  public static final String BUILD_NUMBER = "20200211213650";
+  public static final String BUILD_NUMBER = "20200212163547";
 }
